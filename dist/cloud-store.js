@@ -44,6 +44,10 @@ window.HanpassCloud=(async()=>{
   addEventListener('beforeunload',e=>{if(Object.keys(pending).length){e.preventDefault();e.returnValue=''}});
   return {
     email:session.email,key,
+    async upload(file){
+      const asset=await request('/api/assets',{method:'POST',headers:{'Content-Type':file.type},body:file});
+      return asset.url;
+    },
     async load(){
       const data=await request('/api/projects');
       for(const row of data.projects){revisions[row.document.id]=row.revision;fingerprints.set(row.document.id,fingerprint(row.document))}
