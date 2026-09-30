@@ -1,3 +1,4 @@
+import {landing} from './landing.mjs';
 import {createRemoteJWKSet, jwtVerify} from 'jose';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -97,7 +98,11 @@ export async function api(req,env,user){
 
 export default {async fetch(req,env){
   try{
+    const url=new URL(req.url);
+    if(['/', '/index.html'].includes(url.pathname)&&['GET','HEAD'].includes(req.method))return new Response(req.method==='HEAD'?null:landing,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'same-origin'}});
     const user=await identity(req,env);
+    if(url.pathname==='/studio'||url.pathname==='/studio/'){url.pathname='/index.html';req=new Request(url,req)}
+
     const response=new URL(req.url).pathname.startsWith('/api/')?await api(req,env,user):await env.ASSETS.fetch(req);
     const headers=new Headers(response.headers);headers.set('Cache-Control','private, no-store');headers.set('X-Content-Type-Options','nosniff');headers.set('Referrer-Policy','same-origin');headers.set('X-Frame-Options','DENY');
     return new Response(response.body,{status:response.status,headers});

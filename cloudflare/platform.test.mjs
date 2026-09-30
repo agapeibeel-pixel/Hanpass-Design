@@ -13,7 +13,7 @@ function environment(){
 }
 const req=(path,method='GET',body,origin='https://studio.example')=>new Request('https://studio.example'+path,{method,headers:{Origin:origin,'Content-Type':'application/json'},body:body&&JSON.stringify(body)});
 test('unconfigured and unauthenticated requests fail closed',async()=>{
-  assert.equal((await worker.fetch(req('/index.html'),{})).status,503);
+  assert.equal((await worker.fetch(req('/studio'),{})).status,503);
   await assert.rejects(identity(req('/'),{ACCESS_TEAM_DOMAIN:'team.cloudflareaccess.com',ACCESS_AUD:'aud'}),e=>e.status===401);
 });
 test('forged identity header is never accepted',async()=>{
@@ -62,3 +62,5 @@ test('R2 upload and retrieval enforce image type and asset ownership',async()=>{
   const bad=new Request('https://studio.example/api/assets',{method:'POST',headers:{Origin:'https://studio.example','Content-Type':'image/png'},body:'not an image'});
   assert.equal((await api(bad,env,owner)).status,415);
 });
+
+test('public landing has login links while studio and private data stay protected',async()=>{const env={ACCESS_TEAM_DOMAIN:'team.cloudflareaccess.com',ACCESS_AUD:'aud',ALLOWED_EMAIL_DOMAIN:'hanpass.com'};const res=await worker.fetch(req('/'),env);assert.equal(res.status,200);assert.match(await res.text(),/href="\/studio#home"/);for(const path of ['/studio','/api/projects','/api/assets/'+id,'/app.js'])assert.equal((await worker.fetch(req(path),env)).status,401);assert.equal((await worker.fetch(req('/','POST',{}),env)).status,401);});
