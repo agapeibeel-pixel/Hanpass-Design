@@ -458,7 +458,7 @@
     selectElement(selectedElement);
     bindCanvasMovement(document.getElementById('fwCanvas'));
     document.getElementById('fwDownload').textContent='다운로드 ↓';document.getElementById('fwDownload').onclick=exportDialog;
-    top.querySelector('#fwStatus').title='현재 브라우저에 자동 저장됩니다. 서버 계정 저장은 아직 연결되지 않았습니다.';
+    top.querySelector('#fwStatus').title=cloud?'로그인한 계정에 자동 저장됩니다.':'현재 브라우저에 자동 저장됩니다.';
   }
   function polishPanels(){
     const railIcons={
@@ -551,7 +551,7 @@ if(studioLibrary==='assets'){tabs.hidden=true;footer.hidden=true;library.querySe
   if(cloud)cloud.listen((message,saved,result,source)=>{status(message);if(saved){const w=works.find(w=>w.id===saved.id);if(w&&w.image===source.image)w.image=saved.image;if(draft?.id===saved.id&&draft.image===source.image)draft.image=saved.image;try{localStorage.setItem(worksKey,JSON.stringify(works));if(draft)localStorage.setItem(storageKey,JSON.stringify(draft))}catch{}}});
   window.addEventListener('pagehide',flush);
   render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent=cloud?'내 디자인은 로그인한 계정에 저장됩니다.':'내 디자인은 이 브라우저에 저장됩니다.'}bindWorks();bindSvgImport()};
-  Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{home();bindWorks()}});render();
+  Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{home();bindWorks();bindSvgImport()}});render();
 })();
 
 
