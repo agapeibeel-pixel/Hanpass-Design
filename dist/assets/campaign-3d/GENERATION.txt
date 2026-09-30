@@ -1,0 +1,35 @@
+HANPASS campaign hero artwork — 2026-09-30
+
+Created with the built-in image_gen tool. Original transparent PNGs retained.
+Files: wallet.png, calendar.png, travel.png, gift.png, global.png.
+Text, logo, backgrounds and buttons are drawn separately by format-workspace.js
+and remain editable. The card template uses the existing HANPASS card artwork.
+
+Prompt set
+Common direction: ads-marketing; isolated premium 3D hero artwork for editable
+Korean fintech advertising. Premium contemporary Korean financial advertising,
+polished Cinema4D product rendering, physically believable beveled geometry,
+satin ceramic, glossy acrylic and metallic gold, soft studio key light from upper
+left, cool reflections and realistic ambient occlusion. Blue/white/gold palette.
+Square composition, objects fully in frame, about 85% image coverage, genuine
+transparent background with subtle contact shadow. No typography, letters,
+numbers, logos, watermarks, UI, flat illustration or low-poly forms.
+
+wallet.png: Large cobalt and icy blue wallet open at a three-quarter angle,
+thick gold coins emerging, smooth pearlescent payment card without text,
+gold clasp and two floating gold coins, unified still-life composition.
+
+calendar.png: Periwinkle and white desktop ring calendar, slightly tilted,
+embossed cobalt checkmark on a white page, four thick white rings, polished gold
+notification bell hovering at upper right, two gold coins and tiny white clouds.
+
+travel.png: White passenger airplane with cobalt fuselage accents flying toward
+viewer, pale blue rounded airplane window portal, white clouds, cobalt hard-shell
+suitcase at base and a small gold coin, unified composition.
+
+gift.png: Open glossy cobalt gift box, thick silky ice-blue ribbon curling upward,
+large lustrous gold coin emerging and two smaller floating coins, bold sculpture.
+
+global.png: Translucent icy blue globe, raised white continents and luminous cobalt
+meridians, sweeping polished cobalt orbital arrow, smaller white arrow and two
+gold coins near base, premium international money transfer conceptual sculpture.

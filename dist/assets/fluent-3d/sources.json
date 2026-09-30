@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/microsoft/fluentui-emoji",
+  "commit": "1ffb34c752ecf5d402f04cfb4b392c77f57c54bc",
+  "files": [
+    "assets/Airplane/3D/airplane_3d.png",
+    "assets/Bell/3D/bell_3d.png",
+    "assets/Bus/3D/bus_3d.png",
+    "assets/Coin/3D/coin_3d.png",
+    "assets/Credit card/3D/credit_card_3d.png",
+    "assets/Mobile phone/3D/mobile_phone_3d.png",
+    "assets/Money bag/3D/money_bag_3d.png",
+    "assets/Party popper/3D/party_popper_3d.png",
+    "assets/Shield/3D/shield_3d.png",
+    "assets/Ticket/3D/ticket_3d.png",
+    "assets/Wrapped gift/3D/wrapped_gift_3d.png"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "provider": "Higgsfield",
+  "projectId": "ec83ab36-5592-43d9-a8b4-c56a768f3a4f",
+  "imageJobId": "f0231a6e-bb7f-4ea6-904a-2b2ffca746df",
+  "videoJobId": "55efa408-0dc7-41a7-9094-2b523753af06",
+  "imageModel": "gpt_image_2_5",
+  "videoModel": "seedance_2_5",
+  "description": "Original Hanpass-inspired 3D motion plate. Decorative conceptual app interface, not a live product screenshot. Website typography and official logo are rendered separately.",
+  "durationSeconds": 6
+}
