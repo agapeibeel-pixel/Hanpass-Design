@@ -428,7 +428,7 @@
   }
   function reviewEditor(){
     if(!historyCurrent||JSON.parse(historyCurrent).id!==draft.id){undoStack=[];redoStack=[];historyCurrent=JSON.stringify(draft)}
-    const top=document.querySelector('.fw-top'),save=document.getElementById('fwStatus');
+    const top=document.querySelector('.pagetitle')||document.querySelector('.fw-top'),save=document.getElementById('fwStatus');
     const name=document.createElement('input');name.id='fwProjectName';name.setAttribute('aria-label','프로젝트명');name.value=draft.name||formats[draft.format][0]+' 디자인';name.maxLength=80;top.insertBefore(name,save);name.oninput=()=>{draft.name=name.value;persist()};
     const actions=document.createElement('div');actions.className='fw-history';actions.innerHTML='<button id="fwUndo" aria-label="실행 취소" title="실행 취소">↶</button><button id="fwRedo" aria-label="다시 실행" title="다시 실행">↷</button>';top.insertBefore(actions,document.getElementById('fwDownload'));
     const travel=back=>{const from=back?undoStack:redoStack,to=back?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(draft));draft=JSON.parse(from.pop());historyCurrent=JSON.stringify(draft);loadImage(draft.image);flush();editor()};
@@ -542,14 +542,15 @@ if(studioLibrary==='assets'){tabs.hidden=true;footer.hidden=true;library.querySe
   function bindSvgImport(){
     if(document.getElementById('fwSvgImport'))return;const top=document.querySelector('.fw-top')||document.querySelector('.hp-hero nav')||document.querySelector('#app main')||document.getElementById('app');if(!top)return;
     const button=document.createElement('button');button.id='fwSvgImport';button.className='sv-import-button';button.textContent='SVG 디자인 가져오기';button.title='피그마·일러스트에서 SVG로 내보내기 · 텍스트 윤곽선 변환 해제';
-    const input=document.createElement('input');input.type='file';input.accept='.svg,image/svg+xml';input.hidden=true;input.setAttribute('aria-label','SVG 디자인 파일');top.prepend(button,input);button.onclick=()=>input.click();input.onchange=async()=>{const file=input.files[0];if(!file)return;try{status('SVG 원본을 읽는 중…');const parsed=HanpassSvg.clean(await file.text());const svgRef=await HanpassDesignStorage.save(HanpassSvg.serialize(parsed.svg));flush();draft={id:crypto.randomUUID(),format:1,theme:0,title:file.name.replace(/\.svg$/i,''),name:file.name.replace(/\.svg$/i,''),desc:'',image:'',scale:100,svgRef};picture=null;persist();flush();navigate('format-edit')}catch(e){notify(e.message);input.value=''}};
+    const input=document.createElement('input');input.type='file';input.accept='.svg,image/svg+xml';input.hidden=true;input.setAttribute('aria-label','SVG 디자인 파일');top.append(button,input);if(state.page==='mine'){const hint=document.createElement('p');hint.className='fw-translation-help';hint.textContent='엑셀 번역: SVG 디자인의 이어서 편집 → 상단 번역 Excel 업로드에서 언어를 적용하세요.';top.after(hint)}button.onclick=()=>input.click();input.onchange=async()=>{const file=input.files[0];if(!file)return;try{status('SVG 원본을 읽는 중…');const parsed=HanpassSvg.clean(await file.text());const svgRef=await HanpassDesignStorage.save(HanpassSvg.serialize(parsed.svg));flush();draft={id:crypto.randomUUID(),format:1,theme:0,title:file.name.replace(/\.svg$/i,''),name:file.name.replace(/\.svg$/i,''),desc:'',image:'',scale:100,svgRef};picture=null;persist();flush();navigate('format-edit')}catch(e){notify(e.message);input.value=''}};
   }
   const renderBaseEditor=editor;editor=function(){if(!draft)restore();if(draft?.svgDesign||draft?.svgRef){openSvgEditor();return}renderBaseEditor();reviewEditor();polishPanels();bindSvgImport()};
   const previousNavigate=navigate;
   navigate=function(page){if(state.page==='format-edit')flush();previousNavigate(page)};
+  if(cloud)window.hanpassAccountEmail=cloud.email;
   if(cloud)cloud.listen((message,saved,result,source)=>{status(message);if(saved){const w=works.find(w=>w.id===saved.id);if(w&&w.image===source.image)w.image=saved.image;if(draft?.id===saved.id&&draft.image===source.image)draft.image=saved.image;try{localStorage.setItem(worksKey,JSON.stringify(works));if(draft)localStorage.setItem(storageKey,JSON.stringify(draft))}catch{}}});
   window.addEventListener('pagehide',flush);
-  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent='내 디자인은 이 브라우저에 저장됩니다. 다른 PC와 자동으로 공유되지 않습니다.'}bindWorks();bindSvgImport()};
+  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent=cloud?'내 디자인은 로그인한 계정에 저장됩니다.':'내 디자인은 이 브라우저에 저장됩니다.'}bindWorks();bindSvgImport()};
   Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{home();bindWorks()}});render();
 })();
 
