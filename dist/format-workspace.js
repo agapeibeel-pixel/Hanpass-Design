@@ -218,6 +218,7 @@
   function openTemplate(id){const item=catalog.find(x=>x.id===id);if(!item)return;flush();draft=templateDraft(item);picture=null;selectedElement='title';studioLibrary='templates';flush();navigate('format-edit')}
   function home(){
     const grid=document.querySelector('.size-preset-grid');if(!grid)return;
+ document.getElementById('fwSavedBanners')?.remove();const saved=document.createElement('section');saved.id='fwSavedBanners';saved.innerHTML='<div class="pagetitle"><div><h2>내 디자인</h2><p>업로드하고 번역·편집해 저장한 디자인이 여기에 표시됩니다.</p></div><a class="primary" href="#upload">디자인 파일 올리기</a></div>'+workCards(true);grid.before(saved);bindWorks();
     grid.classList.remove('fw-grid');grid.classList.add('hg-gallery');
     const head=document.querySelector('.size-home-head');if(head)head.innerHTML='<div><span class="eyelabel">HANPASS TEMPLATES</span><h1>어디에 보여줄 디자인인가요?</h1><p>마음에 드는 디자인을 찾아, 내 내용으로 바꿔 보세요.</p></div>';
     const option=(list,value)=>list.map(([v,n])=>`<option value="${v}" ${value===v?'selected':''}>${n}</option>`).join('');
@@ -541,11 +542,14 @@ if(studioLibrary==='assets'){tabs.hidden=true;footer.hidden=true;library.querySe
   async function openSvgEditor(){try{const source=draft.svgRef?await HanpassDesignStorage.load(draft.svgRef):draft.svgDesign;await HanpassSvg.open({source,name:draft.name,onSave:async source=>{const ref=await HanpassDesignStorage.save(source);draft.svgRef=ref;delete draft.svgDesign;persist();flush();const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved?.svgRef!==ref)throw Error('디자인 목록을 저장하지 못했습니다. 파일을 내려받아 보관해 주세요.');},onClose:()=>navigate('mine')})}catch(e){notify(e.message)}}
   function bindSvgImport(){
     if(document.getElementById('fwSvgImport'))return;const top=document.querySelector('.fw-top')||document.querySelector('.hp-hero nav')||document.querySelector('#app main')||document.getElementById('app');if(!top)return;
-    const button=document.createElement('button');button.id='fwSvgImport';button.className='sv-import-button';button.textContent='SVG 디자인 가져오기';button.title='피그마·일러스트에서 SVG로 내보내기 · 텍스트 윤곽선 변환 해제';
+    const button=document.createElement('button');button.id='fwSvgImport';button.className='sv-import-button';button.textContent='디자인 파일 올리기';button.title='피그마·일러스트에서 SVG로 내보내기 · 텍스트 윤곽선 변환 해제';
     const input=document.createElement('input');input.type='file';input.accept='.svg,image/svg+xml';input.hidden=true;input.setAttribute('aria-label','SVG 디자인 파일');top.append(button,input);if(state.page==='mine'){const hint=document.createElement('p');hint.className='fw-translation-help';hint.textContent='엑셀 번역: SVG 디자인의 이어서 편집 → 상단 번역 Excel 업로드에서 언어를 적용하세요.';top.after(hint)}button.onclick=()=>input.click();input.onchange=async()=>{const file=input.files[0];if(!file)return;try{status('SVG 원본을 읽는 중…');const parsed=HanpassSvg.clean(await file.text());const svgRef=await HanpassDesignStorage.save(HanpassSvg.serialize(parsed.svg));flush();draft={id:crypto.randomUUID(),format:1,theme:0,title:file.name.replace(/\.svg$/i,''),name:file.name.replace(/\.svg$/i,''),desc:'',image:'',scale:100,svgRef};picture=null;persist();flush();navigate('format-edit')}catch(e){notify(e.message);input.value=''}};
   }
   const renderBaseEditor=editor;editor=function(){if(!draft)restore();if(draft?.svgDesign||draft?.svgRef){openSvgEditor();return}renderBaseEditor();reviewEditor();polishPanels();bindSvgImport()};
 
+
+ function uploadPage(){document.body.classList.remove('fw-editing');document.getElementById('app').innerHTML='<main style="max-width:1000px;margin:60px auto;padding:24px"><a href="#home">← 배너 디자인</a><div class="pagetitle"><div><h1>디자인 파일 올리기</h1><p>1. SVG 업로드 → 2. 번역 Excel 업로드 → 3. 언어 적용 후 저장</p></div></div><section class="card"><h2>피그마·일러스트 디자인을 가져오세요</h2><p>텍스트를 윤곽선으로 변환하지 않은 SVG 파일을 선택하세요. 이미지나 윤곽선 안의 글자는 번역할 수 없습니다.</p><p>업로드하면 편집창이 열립니다. 상단의 번역 Excel 업로드에서 번역표를 연결하세요.</p><p>저장한 결과는 배너 디자인의 내 디자인 목록에서 다시 편집할 수 있습니다.</p></section></main>';bindSvgImport()}
+ 
   let managementQuery='';
   function managementPage(){
     const titles={campaigns:'디자인 관리',templates:'저장한 디자인으로 만들기',assets:'에셋 라이브러리',inbox:'검수함',settings:'브랜드·규격 설정'};
@@ -563,8 +567,8 @@ if(studioLibrary==='assets'){tabs.hidden=true;footer.hidden=true;library.querySe
   if(cloud)window.hanpassAccountEmail=cloud.email;
   if(cloud)cloud.listen((message,saved,result,source)=>{status(message);if(saved){const w=works.find(w=>w.id===saved.id);if(w&&w.image===source.image)w.image=saved.image;if(draft?.id===saved.id&&draft.image===source.image)draft.image=saved.image;try{localStorage.setItem(worksKey,JSON.stringify(works));if(draft)localStorage.setItem(storageKey,JSON.stringify(draft))}catch{}}});
   window.addEventListener('pagehide',flush);
-  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}if(managementPage())return;document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent=cloud?'내 디자인은 로그인한 계정에 저장됩니다.':'내 디자인은 이 브라우저에 저장됩니다.'}bindWorks();bindSvgImport()};
-  Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{if(managementPage())return;home();bindWorks();bindSvgImport()}});render();
+  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}if(state.page==='upload'){uploadPage();return}if(managementPage())return;document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent=cloud?'내 디자인은 로그인한 계정에 저장됩니다.':'내 디자인은 이 브라우저에 저장됩니다.'}bindWorks();bindSvgImport()};
+  Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{if(state.page==='upload'){uploadPage();return}if(managementPage())return;home();bindWorks();bindSvgImport()}});render();
 })();
 
 
