@@ -100,6 +100,7 @@ export default {async fetch(req,env){
   try{
     const url=new URL(req.url);
     if(['/', '/index.html'].includes(url.pathname)&&['GET','HEAD'].includes(req.method))return new Response(req.method==='HEAD'?null:landing,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'same-origin'}});
+    if(url.pathname==='/assets/hanpass-cards.png'&&['GET','HEAD'].includes(req.method))return env.ASSETS.fetch(req);
     const user=await identity(req,env);
     if(url.pathname==='/studio'||url.pathname==='/studio/'){url.pathname='/';req=new Request(url,req)}
 
