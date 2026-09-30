@@ -7,7 +7,11 @@
   "workers_dev": true,
   "preview_urls": false,
   "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true },
-  "vars": { "ALLOWED_EMAIL_DOMAIN": "hanpass.com" },
+  "vars": {
+    "ALLOWED_EMAIL_DOMAIN": "hanpass.com",
+    "ACCESS_TEAM_DOMAIN": "winter-cake-7bb8.cloudflareaccess.com",
+    "ACCESS_AUD": "7351d77a7a612a5dc22fa1d1170a9ec700db12041e68fd680c5f6c506956d2fe"
+  },
   "d1_databases": [{ "binding": "DB", "database_name": "hanpass-design-db", "database_id": "9c1fe915-7142-45d4-b5ec-80d5e91ed3e3", "migrations_dir": "cloudflare/migrations" }],
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "hanpass-design-files" }]
 }
