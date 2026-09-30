@@ -1,7 +1,7 @@
 // Size-first employee editor. Canvas is shared by preview and PNG export.
 (async () => {
   let cloud;
-  try{cloud=await window.HanpassCloud}catch(e){document.getElementById('app').textContent=e.message;return}
+  try{cloud=await window.HanpassCloud}catch(e){document.getElementById("app").textContent=e.message;return}
   const formats = [
     ['모바일 배너',616,136,'모바일 화면에 짧은 소식을 전할 때'],
     ['홈 상단 배너',640,284,'홈에서 행사와 혜택을 소개할 때'],
@@ -76,7 +76,11 @@
   function bindWorks(){document.querySelectorAll('[data-fw-open]').forEach(b=>b.onclick=()=>openWork(b.dataset.fwOpen));document.querySelectorAll('[data-fw-copy]').forEach(b=>b.onclick=()=>openWork(b.dataset.fwCopy,true));document.querySelectorAll('[data-fw-preview]').forEach(c=>{const d=works.find(w=>w.id===c.dataset.fwPreview);if(!d)return;paint(c,d,null);if(d.image){const im=new Image();im.onload=()=>{if(c.isConnected)paint(c,d,im)};im.src=d.image}})}
   function status(text){const el=document.getElementById('fwStatus');if(el)el.textContent=text}
   function wrap(ctx,text,width){const result=[];for(const paragraph of String(text).split('\n')){let line='';for(const char of Array.from(paragraph)){if(line&&ctx.measureText(line+char).width>width){result.push(line.trimEnd());line=char.trimStart()}else line+=char}result.push(line)}return result}
+  const svgPreviews=new Map();
   function paint(canvas,d,img,interactive=false,resolution=1){
+    if(d.svgRef&&!d.svgDesign){HanpassDesignStorage.load(d.svgRef).then(source=>{if(canvas.isConnected)paint(canvas,{...d,svgDesign:source},img,interactive,resolution)}).catch(()=>{});return}
+    if(d.svgDesign){try{let entry=svgPreviews.get(d.svgDesign);if(!entry){const parsed=HanpassSvg.clean(d.svgDesign),image=new Image();entry={image,width:parsed.width,height:parsed.height};svgPreviews.set(d.svgDesign,entry);if(svgPreviews.size>20)svgPreviews.delete(svgPreviews.keys().next().value);image.onload=()=>{if(canvas.isConnected)paint(canvas,d,img,interactive,resolution)};image.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(HanpassSvg.serialize(parsed.svg));}canvas.width=Math.ceil(entry.width*resolution);canvas.height=Math.ceil(entry.height*resolution);if(entry.image.complete&&entry.image.naturalWidth)canvas.getContext('2d').drawImage(entry.image,0,0,canvas.width,canvas.height);return}catch{return}}
+
     const [,w,h]=formats[d.format],r=w/h,thin=h<=70,ribbon=!thin&&r>4,square=r<1.6,t=themes[d.theme];
     const density=interactive?Math.min(6,Math.max(2,Math.ceil(Math.max(1200,canvas.getBoundingClientRect().width*(window.devicePixelRatio||1))/w))):resolution;canvas.width=Math.round(w*density);canvas.height=Math.round(h*density);const c=canvas.getContext('2d');c.scale(density,density);c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';const ink=d.ink||t[2],accent=t[3],p=thin?Math.round(h*.22):Math.round(Math.min(w,h)*.10);
     c.fillStyle=canvasFill(c,d.backgroundFill,0,0,w,h,d.bg||t[1]);c.fillRect(0,0,w,h);
@@ -87,16 +91,19 @@
     }
     if(interactive){hits=[];checks=[];if(!d.title.trim()&&!d.textStyles?.title?.hidden)checks.push({error:true,text:'제목을 입력해 주세요.'});if(contrast(d.bg||premiumSets[d.premium]?.bg||t[1],d.ink||premiumSets[d.premium]?.ink||ink)<4.5)checks.push({text:'배경과 글자의 대비가 낮아요. 색상 조합을 변경해 주세요.'});if(d.requireNote&&!d.note?.trim())checks.push({error:true,text:'필수 안내 문구를 입력해 주세요.'})}
     function box(color,x,y,bw,bh,rad=0){c.fillStyle=color;c.beginPath();c.roundRect(x,y,bw,bh,rad);c.fill()}
-    function text(key,value,x,y,bw,bh,fs,weight=500,color=ink,linesMax=2,align='left',vertical='top'){
-      if(!value||d.textStyles?.[key]?.hidden)return;let lines;const style=d.textStyles?.[key]||{};if(key!=='cta'){x+=(style.x||0)*w;y+=(style.y||0)*h;}fs*=(d.scale/100||1)*(style.scale/100||1);color=style.color||color;align=style.align||align;weight=style.weight||weight;const min=Math.max(7,fs*.65);if(interactive&&style.color&&key!=='cta'&&contrast(d.bg||premiumSets[d.premium]?.bg||t[1],color)<4.5)checks.push({text:(fieldNames[key]||key)+' 글자색 대비가 낮아요.'});
-      while(true){c.font=`${weight} ${fs}px "Pretendard", "Noto Sans KR", Arial, sans-serif`;lines=wrap(c,value,bw);if(lines.length<=linesMax&&lines.length*fs*1.35<=bh||fs<=min)break;fs=Math.max(min,fs-.25)}
-      if(interactive){if(lines.length>linesMax||lines.length*fs*1.35>bh)checks.push({error:true,text:`${fieldNames[key]||key} 문구가 영역을 넘어요. 줄이거나 다른 구성을 선택해 주세요.`});else if(fs<10)checks.push({text:`${fieldNames[key]||key} 글자가 작아요 (${Math.round(fs)}px). 실제 크기로 확인해 주세요.`})}
-      c.save();c.beginPath();c.rect(x,y,bw,bh);c.clip();c.fillStyle=canvasFill(c,style.fill,x,y,bw,bh,color);c.textBaseline='alphabetic';c.textAlign=align;const shown=lines.slice(0,linesMax),metrics=shown.map(line=>c.measureText(line)),ascent=Math.max(...metrics.map(m=>m.actualBoundingBoxAscent)),descent=Math.max(...metrics.map(m=>m.actualBoundingBoxDescent)),blockHeight=ascent+descent+(shown.length-1)*fs*1.35,top=vertical==='middle'?y+(bh-blockHeight)/2:y;shown.forEach((line,i)=>c.fillText(line,align==='center'?x+bw/2:align==='right'?x+bw:x,top+ascent+i*fs*1.35));c.restore();
-      if(interactive)hits.push({key,x,y,w:bw,h:bh});
+    const textQueue=[];
+    function text(...args){textQueue.push(args)}
+    function drawText(key,value,x,y,bw,bh,fs,weight=500,color=ink,linesMax=2,align='left',vertical='top'){
+      if(!value||d.textStyles?.[key]?.hidden)return;let lines;const style=d.textStyles?.[key]||{};if(key!=='cta'){x+=(style.x||0)*w;y+=(style.y||0)*h;}fs=style.fontSize||fs*(d.scale/100||1)*(style.scale/100||1);color=style.color||color;align=style.align||align;weight=style.weight||weight;const lineHeight=style.lineHeight||1.35;const requestedSize=fs;const min=Math.max(7,Math.min(fs,fs*.45));if(interactive&&style.color&&key!=='cta'&&contrast(d.bg||premiumSets[d.premium]?.bg||t[1],color)<4.5)checks.push({text:(fieldNames[key]||key)+' 글자색 대비가 낮아요.'});
+      while(true){c.font=`${style.italic?'italic ':''}${weight} ${fs}px "${style.fontFamily||'Pretendard'}", "Noto Sans KR", Arial, sans-serif`;c.letterSpacing=(style.letterSpacing||0)+'px';lines=wrap(c,value,bw);if(lines.length<=linesMax&&lines.length*fs*lineHeight<=bh||fs<=min)break;fs=Math.max(min,fs-.25)}
+      if(interactive){if(style.fontSize&&fs<requestedSize)checks.push({text:(fieldNames[key]||key)+' 문구를 영역에 맞춰 '+Math.round(fs)+'px로 표시했어요.'});if(lines.length>linesMax||lines.length*fs*lineHeight>bh)checks.push({error:true,text:`${fieldNames[key]||key} 문구가 영역을 넘어요. 줄이거나 다른 구성을 선택해 주세요.`});else if(fs<10)checks.push({text:`${fieldNames[key]||key} 글자가 작아요 (${Math.round(fs)}px). 실제 크기로 확인해 주세요.`})}
+      c.save();c.globalAlpha=(style.opacity??100)/100;if(style.shadow){c.shadowColor=style.shadowColor||'#00000066';c.shadowBlur=style.shadowBlur??4;c.shadowOffsetX=2;c.shadowOffsetY=2;}c.beginPath();c.rect(x,y,bw,bh);c.clip();c.fillStyle=canvasFill(c,style.fill,x,y,bw,bh,color);c.textBaseline='alphabetic';c.textAlign=align;const shown=lines.slice(0,linesMax),metrics=shown.map(line=>c.measureText(line)),ascent=Math.max(...metrics.map(m=>m.actualBoundingBoxAscent)),descent=Math.max(...metrics.map(m=>m.actualBoundingBoxDescent)),blockHeight=ascent+descent+(shown.length-1)*fs*lineHeight,top=vertical==='middle'?y+(bh-blockHeight)/2:y;shown.forEach((line,i)=>{const tx=align==='center'?x+bw/2:align==='right'?x+bw:x,ty=top+ascent+i*fs*lineHeight;if(style.outline){c.strokeStyle=style.outlineColor||'#ffffff';c.lineWidth=style.outlineWidth||1;c.lineJoin='round';c.strokeText(line,tx,ty)}c.fillText(line,tx,ty);if(style.underline){const width=c.measureText(line).width,lx=align==='center'?tx-width/2:align==='right'?tx-width:tx;c.fillRect(lx,ty+fs*.1,width,Math.max(1,fs*.055))}});c.restore();
+      if(interactive)hits.push({key,x,y,w:bw,h:bh,fs,weight,align,lineHeight,color,fontFamily:style.fontFamily||'Pretendard'});
     }
     function logo(x,y,lw){const bg=d.bg||t[1],rgb=bg.match(/[a-f0-9]{2}/gi).map(v=>parseInt(v,16)),dark=(rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722)<145;const image=dark?brandWhite:brandLogo;if(!image.naturalWidth)return;c.drawImage(image,x,y,lw,lw*895.37/5320)}
     function art(x,y,bw,bh){
       if(d.artMode==='none')return;
+      if(!Number.isInteger(d.premium)){x+=(d.imagePosition?.x||0)*w;y+=(d.imagePosition?.y||0)*h;}
       const a=img||brandCards;if(!a.naturalWidth)return;
       const icon=!!img&&(String(d.image).startsWith('data:image/svg+xml')||String(d.image).startsWith('assets/fluent-3d/'));
       const sw=img?a.naturalWidth:690,sh=img?a.naturalHeight:1005;
@@ -106,7 +113,8 @@
       if(img)c.drawImage(a,dx,dy,sw*s,sh*s);else c.drawImage(a,210,175,690,1005,dx,dy,sw*s,sh*s);
       c.restore();if(interactive)hits.push({key:'image',x,y,w:bw,h:bh});
     }
-    function button(x,y,bw,bh){if(!d.cta)return;box(t[4]?'#ffffff':accent,x,y,bw,bh,t[4]?bh/2:Math.min(8,bh*.25));text('cta',d.cta,x+bh*.35,y,bw-bh*.7,bh,Math.min(18,bh*.40),700,t[4]?ink:([1,3].includes(d.theme)?'#142d52':'#fff'),1,'center','middle')}
+    function button(x,y,bw,bh){if(!d.cta||d.textStyles?.cta?.hidden)return;x+=(d.textStyles?.cta?.x||0)*w;y+=(d.textStyles?.cta?.y||0)*h;box(t[4]?'#ffffff':accent,x,y,bw,bh,t[4]?bh/2:Math.min(8,bh*.25));text('cta',d.cta,x+bh*.35,y,bw-bh*.7,bh,Math.min(18,bh*.40),700,t[4]?ink:([1,3].includes(d.theme)?'#142d52':'#fff'),1,'center','middle')}
+    try {
     if(Number.isInteger(d.premium)&&premiumSets[d.premium]){
       const set=premiumSets[d.premium],portrait=r<1.35,compact=thin||ribbon;
       const bg=d.bg||set.bg,ti=d.ink||set.ink,dark=contrast(bg,'#ffffff')>4.5;
@@ -172,20 +180,12 @@
       text('desc',d.desc,p,h*.60,cw,h*.13,Math.min(14,w*.037),400,ink,2);
       button(p,h*.80,cw,h*.12);art(w*.53,p,w*.47-p,h*.78);
       text('note',[d.period,d.note].filter(Boolean).join(' · '),p,h*.94,w-2*p,h*.055,Math.min(10,w*.028),400,ink,1);
-    }else if(thin){
-      const mini=w<400,lw=mini?58:96,lx=p,tx=lx+lw+(mini?14:28),right=mini?p:92;
-      logo(lx,(h-lw*58/342)/2,lw);const tw=w-tx-right-p;
-      text('title',d.title.replace(/\n/g,' '),tx,h*.19,tw,h*.34,mini?12:18,800,ink,1);
-      text(layout==='notice'?'period':'desc',layout==='notice'?d.period:d.desc,tx,h*.58,tw,h*.24,mini?9:12,400,ink,1);
-      if(!mini&&layout!=='notice')art(w-right,p,right-p,h-2*p);
-      if(d.note)text('note',d.note,tx,h*.83,tw,h*.15,6,400,ink,1);
-    }else if(ribbon){
-      const lw=84,tx=p+lw+28,tw=w-tx-105-p;
-      logo(p,(h-lw*58/342)/2,lw);
-      text('title',d.title.replace(/\n/g,' '),tx,h*.24,tw,h*.32,23,800,ink,1);
-      text(layout==='notice'?'period':'desc',layout==='notice'?d.period:d.desc,tx,h*.61,tw,h*.22,14,400,ink,1);
-      if(layout!=='notice')art(w-105-p,p,105,h-2*p);
-      if(d.note)text('note',d.note,tx,h*.85,tw,h*.10,7,400,ink,1);
+    }else if(thin||ribbon){
+      const left=w*.045,tw=w*.67-left,lw=Math.min(w*.16,h*.68);
+      logo(left,h*.10,lw);
+      text('title',thin?d.title.replace(/\n/g,' '):d.title,left,h*.31,tw,h*.43,Math.min(h*.18,w*.041),800,ink,thin?1:2);
+      text(layout==='notice'?'period':'desc',layout==='notice'?d.period:d.desc,left,h*.79,tw,h*.17,Math.min(h*.105,w*.022),500,ink,1);
+      if(layout!=='notice')art(w*.70,h*.035,w*.28,h*.93);
     }else if(square){
       logo(p,p,w*.33);
       text('title',d.title,p,h*.23,w-2*p,h*.24,w*.086,800,ink,2);
@@ -202,6 +202,10 @@
       button(p+tw*.62,h*.755,tw*.38,h*.14);
       art(w*.66,p,w*.28,h-2*p);
       if(d.note||d.period||d.coupon)text('note',[d.period,d.coupon,d.note].filter(Boolean).join(' · '),p,h*.93,w-2*p,h*.055,9,400,ink,1);
+    }
+    } finally {
+      const extras=(d.extraTexts||[]).map(item=>{const source=textQueue.find(args=>args[0]===item.source);return source?[item.key,item.value,...source.slice(2)]:null}).filter(Boolean);
+      [...textQueue,...extras].sort((a,b)=>(d.textStyles?.[a[0]]?.order||0)-(d.textStyles?.[b[0]]?.order||0)).forEach(args=>drawText(...args));
     }
   }
   const galleryState={search:'',category:'all',style:'all',color:'all',favorites:false};
@@ -328,7 +332,7 @@
     fields.append(previewPanel.querySelector('.fw-quality'));
     const showLibrary=mode=>{studioLibrary=mode;const isAssets=mode==='assets';grid.hidden=isAssets;library.querySelector('input').hidden=isAssets;assets.hidden=!isAssets;library.querySelector('h2').textContent=isAssets?'이미지·아이콘':'디자인 선택';document.getElementById('fwTemplates').classList.toggle('active',!isAssets);document.getElementById('fwAssets').classList.toggle('active',isAssets)};
     document.getElementById('fwTemplates').onclick=()=>showLibrary('templates');document.getElementById('fwAssets').onclick=()=>showLibrary('assets');showLibrary(studioLibrary);
-    const hint=previewPanel.querySelector(':scope > p');hint.textContent='문구·이미지를 드래그해 이동하세요. Delete 키로 삭제할 수 있어요.';
+    const hint=previewPanel.querySelector(':scope > p');hint.textContent='더블클릭으로 문구 수정 · 드래그로 이동 · Delete로 삭제';
     const canvas=document.getElementById('fwCanvas');canvas.setAttribute('aria-label','디자인 미리보기');
     const size=document.createElement('select');size.className='fw-size-select';size.setAttribute('aria-label','크기 다시 선택');size.innerHTML=formats.map((f,i)=>`<option value="${i}">${f[1]} × ${f[2]} · ${f[0]}</option>`).join('');size.value=draft.format;document.querySelector('.fw-editor-title').append(size);size.onchange=()=>{draft.format=+size.value;persist();editor()};
     const toolbar=document.createElement('div');toolbar.className='fw-zoom-bar';toolbar.innerHTML='<span>디자인 미리보기</span><button id="fwZoomOut" aria-label="Zoom out">−</button><output id="fwZoomValue"></output><button id="fwZoomIn" aria-label="Zoom in">＋</button><button id="fwZoomFit">화면에 맞추기</button>';previewPanel.append(toolbar);
@@ -353,20 +357,63 @@
     const canvas=document.getElementById('fwCanvas'),wrap=canvas?.parentElement;if(!canvas)return;let outline=wrap.querySelector('.fw-selection-outline');if(!outline){outline=document.createElement('div');outline.className='fw-selection-outline';outline.setAttribute('aria-hidden','true');wrap.append(outline)}
     const hit=hits.find(x=>x.key===selectedElement);outline.hidden=!hit;if(!hit)return;const rect=canvas.getBoundingClientRect(),parent=wrap.getBoundingClientRect(),f=formats[draft.format];Object.assign(outline.style,{left:rect.left-parent.left+wrap.scrollLeft+hit.x*rect.width/f[1]+'px',top:rect.top-parent.top+wrap.scrollTop+hit.y*rect.height/f[2]+'px',width:hit.w*rect.width/f[1]+'px',height:hit.h*rect.height/f[2]+'px'});
   }
-  function removeSelected(){if(selectedElement==='image')draft.artMode='none';else{draft.textStyles=draft.textStyles||{};draft.textStyles[selectedElement]={...draft.textStyles[selectedElement],hidden:true}}persist();selectElement(selectedElement);preview()}
+  function removeSelected(){if(draft.textStyles?.[selectedElement]?.locked)return;if(selectedElement==='image')draft.artMode='none';else{draft.textStyles=draft.textStyles||{};draft.textStyles[selectedElement]={...draft.textStyles[selectedElement],hidden:true}}persist();selectElement(selectedElement);preview()}
   let canvasObserver;
+  function movementDelta(hit,dx,dy,w,h,others=[],tolerance=0){
+    const clamp=(v,start,size,limit)=>Math.max(-start,Math.min(Math.max(0,limit-size)-start,v));
+    dx=clamp(dx,hit.x,hit.w,w);dy=clamp(dy,hit.y,hit.h,h);
+    const snap=(value,start,size,limit,axis)=>{
+      const targets=[0,limit/2,limit,...others.flatMap(o=>axis==='x'?[o.x,o.x+o.w/2,o.x+o.w]:[o.y,o.y+o.h/2,o.y+o.h])];
+      let best=null;
+      for(const target of targets)for(const offset of [0,size/2,size]){const delta=target-start-offset,distance=Math.abs(delta-value);if(distance<=tolerance&&(!best||distance<best.distance)&&delta===clamp(delta,start,size,limit))best={delta,target,distance};}
+      return best;
+    };
+    const x=tolerance?snap(dx,hit.x,hit.w,w,'x'):null,y=tolerance?snap(dy,hit.y,hit.h,h,'y'):null;
+    return {dx:x?x.delta:dx,dy:y?y.delta:dy,gx:x?.target,gy:y?.target};
+  }
   function bindCanvasMovement(canvas){
     let drag=null;const coords=e=>{const rect=canvas.getBoundingClientRect(),f=formats[draft.format];return {x:(e.clientX-rect.left)*f[1]/rect.width,y:(e.clientY-rect.top)*f[2]/rect.height}};
     const position=key=>key==='image'?(draft.imagePosition||{}):(draft.textStyles?.[key]||{});
-    const move=(key,x,y)=>{if(key==='image')draft.imagePosition={x,y};else{draft.textStyles=draft.textStyles||{};draft.textStyles[key]={...draft.textStyles[key],x,y}}};
-    canvas.onclick=null;canvas.style.touchAction='none';canvas.onpointerdown=e=>{if(e.button!==0)return;const p=coords(e),hit=[...hits].reverse().find(a=>p.x>=a.x&&p.x<=a.x+a.w&&p.y>=a.y&&p.y<=a.y+a.h);if(!hit)return;e.preventDefault();selectElement(hit.key);canvas.focus({preventScroll:true});const old=position(hit.key);drag={key:hit.key,p,hit:{...hit},x:old.x||0,y:old.y||0};canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing'};
-    canvas.onpointermove=e=>{const p=coords(e);if(!drag){canvas.style.cursor=hits.some(a=>p.x>=a.x&&p.x<=a.x+a.w&&p.y>=a.y&&p.y<=a.y+a.h)?'grab':'default';return}const f=formats[draft.format],dx=Math.max(-drag.hit.x,Math.min(f[1]-drag.hit.x-drag.hit.w,p.x-drag.p.x)),dy=Math.max(-drag.hit.y,Math.min(f[2]-drag.hit.y-drag.hit.h,p.y-drag.p.y));move(drag.key,drag.x+dx/f[1],drag.y+dy/f[2]);preview()};
-    canvas.onpointerup=e=>{if(!drag)return;drag=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);canvas.style.cursor='grab';persist()};canvas.onpointercancel=()=>{if(drag){move(drag.key,drag.x,drag.y);drag=null;preview()}};
-    canvas.onkeydown=e=>{if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();removeSelected();return}const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};if(!directions[e.key])return;const hit=hits.find(x=>x.key===selectedElement);if(!hit)return;e.preventDefault();const f=formats[draft.format],old=position(selectedElement),step=e.shiftKey?10:1,[dx,dy]=directions[e.key];move(selectedElement,(old.x||0)+Math.max(-hit.x,Math.min(f[1]-hit.x-hit.w,dx*step))/f[1],(old.y||0)+Math.max(-hit.y,Math.min(f[2]-hit.y-hit.h,dy*step))/f[2]);persist();preview()};
+    const locked=key=>!!draft.textStyles?.[key]?.locked;
+    const move=(key,x,y)=>{if(key==='image')draft.imagePosition={...draft.imagePosition,x,y};else{draft.textStyles=draft.textStyles||{};draft.textStyles[key]={...draft.textStyles[key],x,y}}};
+    const guides=(gx,gy)=>{const parent=canvas.parentElement,r=canvas.getBoundingClientRect(),p=parent.getBoundingClientRect(),f=formats[draft.format];for(const [axis,value] of [['x',gx],['y',gy]]){let line=parent.querySelector('.fw-guide-'+axis);if(!line){line=document.createElement('div');line.className='fw-move-guide fw-guide-'+axis;parent.append(line)}line.hidden=value==null;Object.assign(line.style,axis==='x'?{left:r.left-p.left+parent.scrollLeft+(value||0)*r.width/f[1]+'px',top:r.top-p.top+parent.scrollTop+'px',height:r.height+'px'}:{top:r.top-p.top+parent.scrollTop+(value||0)*r.height/f[2]+'px',left:r.left-p.left+parent.scrollLeft+'px',width:r.width+'px'});}};
+    const finish=cancel=>{if(!drag)return;const current=drag;drag=null;guides();if(cancel)move(current.key,current.x,current.y);else if(current.moved)persist();if(canvas.hasPointerCapture(current.id))canvas.releasePointerCapture(current.id);canvas.style.cursor='grab';preview()};
+    canvas.onclick=null;canvas.style.touchAction='none';canvas.title='드래그로 이동 · Shift 드래그: 한 방향 · Alt: 맞춤 해제 · 방향키: 1px · Shift+방향키: 10px · Esc: 이동 취소';
+    canvas.onpointerdown=e=>{if(e.button!==0)return;const p=coords(e),hit=[...hits].reverse().find(a=>p.x>=a.x&&p.x<=a.x+a.w&&p.y>=a.y&&p.y<=a.y+a.h);canvas.focus({preventScroll:true});if(!hit){selectedElement=null;selectionOutline();return}e.preventDefault();selectElement(hit.key);canvas.focus({preventScroll:true});const old=position(hit.key);if(locked(hit.key))return;drag={key:hit.key,id:e.pointerId,p,hit:{...hit},x:old.x||0,y:old.y||0,moved:false};canvas.setPointerCapture(e.pointerId)};
+    canvas.onpointermove=e=>{const p=coords(e);if(!drag){const hit=[...hits].reverse().find(a=>p.x>=a.x&&p.x<=a.x+a.w&&p.y>=a.y&&p.y<=a.y+a.h);canvas.style.cursor=hit?(locked(hit.key)?'not-allowed':'grab'):'default';return}const f=formats[draft.format],ratio=f[1]/canvas.getBoundingClientRect().width;let dx=p.x-drag.p.x,dy=p.y-drag.p.y;if(!drag.moved&&Math.hypot(dx,dy)<3*ratio)return;drag.moved=true;canvas.style.cursor='grabbing';const horizontal=Math.abs(dx)>=Math.abs(dy);if(e.shiftKey){if(horizontal)dy=0;else dx=0;}const result=movementDelta(drag.hit,dx,dy,f[1],f[2],hits.filter(a=>a.key!==drag.key),e.altKey?0:5*ratio);if(e.shiftKey){if(horizontal){result.dy=0;result.gy=null}else{result.dx=0;result.gx=null}}move(drag.key,drag.x+result.dx/f[1],drag.y+result.dy/f[2]);preview();guides(result.gx,result.gy)};
+    canvas.onpointerup=()=>finish(false);canvas.onpointercancel=()=>finish(true);canvas.onlostpointercapture=()=>finish(true);
+    canvas.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();if(drag)finish(true);else{selectedElement=null;selectionOutline()}return}if(drag)return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();document.getElementById(e.shiftKey?'fwRedo':'fwUndo')?.click();canvas.focus({preventScroll:true});return}if(!selectedElement)return;if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();removeSelected();return}const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};if(!directions[e.key])return;const hit=hits.find(x=>x.key===selectedElement);if(!hit||locked(selectedElement))return;e.preventDefault();const f=formats[draft.format],old=position(selectedElement),step=e.shiftKey?10:1,[dx,dy]=directions[e.key],delta=movementDelta(hit,dx*step,dy*step,f[1],f[2]);move(selectedElement,(old.x||0)+delta.dx/f[1],(old.y||0)+delta.dy/f[2]);persist();preview()};
+    canvas.ondblclick=()=>{if(selectedElement)editInline(canvas)};
     canvasObserver?.disconnect();canvasObserver=new ResizeObserver(selectionOutline);canvasObserver.observe(canvas);
   }
+
+  function textValue(key){return draft.extraTexts?.find(x=>x.key===key)?.value??draft[key]??''}
+  function setTextValue(key,value){const item=draft.extraTexts?.find(x=>x.key===key);if(item)item.value=value;else draft[key]=value;const field=document.getElementById('fw-'+key);if(field)field.value=value;}
+  function editInline(canvas){
+    const key=selectedElement,hit=hits.find(x=>x.key===key);if(!hit||key==='image'||draft.textStyles?.[key]?.locked)return;
+    document.querySelector('.fw-inline-editor')?.blur();const rect=canvas.getBoundingClientRect(),f=formats[draft.format],input=document.createElement('textarea');input.className='fw-inline-editor';input.setAttribute('aria-label','캔버스 문구 편집');input.value=textValue(key);
+    Object.assign(input.style,{position:'fixed',left:rect.left+hit.x*rect.width/f[1]+'px',top:rect.top+hit.y*rect.height/f[2]+'px',width:hit.w*rect.width/f[1]+'px',height:Math.max(44,hit.h*rect.height/f[2])+'px',fontSize:hit.fs*rect.width/f[1]+'px',fontFamily:hit.fontFamily,fontWeight:hit.weight,textAlign:hit.align,lineHeight:hit.lineHeight});
+    let cancel=false;input.onkeydown=e=>{e.stopPropagation();if(e.isComposing)return;if(e.key==='Escape'){cancel=true;input.blur()}else if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();input.blur()}};
+    input.onblur=()=>{if(!cancel){setTextValue(key,input.value);persist()}input.remove();selectElement(key)};document.body.append(input);input.focus();input.select();
+  }
+  function textInspector(box,key){
+    const st=draft.textStyles?.[key]||{},hit=hits.find(x=>x.key===key),locked=!!st.locked;
+    const update=(prop,value)=>{draft.textStyles??={};draft.textStyles[key]={...draft.textStyles[key],[prop]:value};persist();preview()};
+    const number=(label,prop,value,min,max,step=1)=>'<label>'+label+'<input type="number" data-prop="'+prop+'" aria-label="'+label+'" value="'+value+'" min="'+min+'" max="'+max+'" step="'+step+'"></label>';
+    box.innerHTML='<h3>텍스트 <small>'+escaped(fieldNames[key]||'복제 문구')+'</small></h3><div class="fw-text-actions"><button data-duplicate>복제</button><button data-lock aria-pressed="'+locked+'">'+(locked?'잠금 해제':'잠금')+'</button></div><fieldset '+(locked?'disabled':'')+'><label>문구<textarea aria-label="선택한 텍스트" rows="3">'+escaped(textValue(key))+'</textarea></label><label>글꼴<select data-font aria-label="글꼴"><option>Pretendard</option><option>Noto Sans KR</option><option>Arial</option></select></label><div class="fw-text-grid">'+number('글자 크기 (px)','fontSize',st.fontSize||Math.round((hit?.fs||24)*10)/10,6,300,.5)+'<label>굵기<select data-weight aria-label="글자 굵기"><option value="400">Regular</option><option value="500">Medium</option><option value="700">Bold</option><option value="800">Extra Bold</option><option value="900">Black</option></select></label></div><div class="fw-type-buttons"><button data-step="-1" aria-label="글자 크기 줄이기">−</button><button data-step="1" aria-label="글자 크기 늘리기">＋</button><button data-toggle="italic" aria-pressed="'+!!st.italic+'"><i>I</i></button><button data-toggle="underline" aria-pressed="'+!!st.underline+'"><u>U</u></button></div><div class="fw-align-buttons">'+['left','center','right'].map((v,i)=>'<button data-align="'+v+'" aria-pressed="'+((st.align||hit?.align||defaultTextAlign(key))===v)+'">'+['왼쪽','가운데','오른쪽'][i]+'</button>').join('')+'</div><div class="fw-text-grid">'+number('자간 (px)','letterSpacing',st.letterSpacing||0,-5,30,.5)+number('줄 간격','lineHeight',st.lineHeight||1.35,.8,3,.05)+'</div><label>불투명도 <input aria-label="텍스트 불투명도" data-opacity type="range" min="0" max="100" value="'+(st.opacity??100)+'"></label><div data-colors></div><details><summary>외곽선</summary><label><input type="checkbox" data-effect="outline" '+(st.outline?'checked':'')+'> 사용</label>'+number('외곽선 두께','outlineWidth',st.outlineWidth||1,1,12)+'<input aria-label="외곽선 색상" type="color" data-effect-color="outlineColor" value="'+(st.outlineColor||'#ffffff')+'"></details><details><summary>그림자</summary><label><input type="checkbox" data-effect="shadow" '+(st.shadow?'checked':'')+'> 사용</label>'+number('그림자 흐림','shadowBlur',st.shadowBlur??4,0,30)+'</details><div class="fw-text-actions"><button data-order="-1">뒤로 보내기</button><button data-order="1">앞으로 가져오기</button></div></fieldset>';
+    box.querySelector('textarea').onchange=e=>{setTextValue(key,e.target.value);persist();preview()};box.querySelector('[data-font]').value=st.fontFamily||'Pretendard';box.querySelector('[data-font]').onchange=e=>update('fontFamily',e.target.value);box.querySelector('[data-weight]').value=st.weight||hit?.weight||800;box.querySelector('[data-weight]').onchange=e=>update('weight',+e.target.value);
+    box.querySelectorAll('[data-prop]').forEach(el=>el.onchange=()=>{const v=+el.value;if(!Number.isFinite(v)||el.value==='')return;el.value=Math.min(+el.max,Math.max(+el.min,v));update(el.dataset.prop,+el.value)});
+    box.querySelectorAll('[data-step]').forEach(el=>el.onclick=()=>{const n=box.querySelector('[data-prop="fontSize"]');n.value=Math.max(6,Math.min(300,+n.value+ +el.dataset.step));n.onchange()});
+    box.querySelectorAll('[data-toggle]').forEach(el=>el.onclick=()=>{const v=el.getAttribute('aria-pressed')!=='true';el.setAttribute('aria-pressed',v);update(el.dataset.toggle,v)});
+    box.querySelectorAll('[data-align]').forEach(el=>el.onclick=()=>{update('align',el.dataset.align);box.querySelectorAll('[data-align]').forEach(b=>b.setAttribute('aria-pressed',b===el))});
+    box.querySelector('[data-opacity]').oninput=e=>update('opacity',+e.target.value);box.querySelectorAll('[data-effect]').forEach(el=>el.onchange=()=>update(el.dataset.effect,el.checked));box.querySelectorAll('[data-effect-color]').forEach(el=>el.oninput=()=>update(el.dataset.effectColor,el.value));
+    box.querySelectorAll('[data-order]').forEach(el=>el.onclick=()=>update('order',(draft.textStyles?.[key]?.order||0)+ +el.dataset.order));
+    box.querySelector('[data-lock]').onclick=()=>{update('locked',!locked);selectElement(key)};
+    box.querySelector('[data-duplicate]').disabled=locked;box.querySelector('[data-duplicate]').onclick=()=>{const id='text_'+crypto.randomUUID(),source=draft.extraTexts?.find(x=>x.key===key)?.source||key;draft.extraTexts??=[];draft.extraTexts.push({key:id,source,value:textValue(key)});draft.textStyles??={};draft.textStyles[id]={...structuredClone(st),x:(st.x||0)+.025,y:(st.y||0)+.025,locked:false,hidden:false};persist();preview();selectElement(id)};
+    fillPicker(box.querySelector('[data-colors]'),'글자 색상',st.fill||{type:'solid',colors:[st.color||hit?.color||draft.ink||'#12336b','#e968a0'],angle:135},fill=>update('fill',fill));
+  }
   function selectElement(key){
-    selectedElement=key;document.querySelector('[data-inspector=elements]')?.click();
+    if(!key)key='title';if(key.startsWith('text_')&&!draft.extraTexts?.some(x=>x.key===key))key='title';selectedElement=key;document.querySelector('[data-inspector=elements]')?.click();
     document.querySelectorAll('[data-fw-field]').forEach(el=>el.closest('label').classList.toggle('fw-selected-field',el.dataset.fwField===key));
     const box=document.getElementById('fwElementProperties');if(!box)return;
     if(key==='image'){
@@ -374,17 +421,10 @@
       box.querySelector('#fwReplaceSelected').onclick=()=>document.getElementById('fwImage').click();
       box.querySelector('#fwResetSelected').onclick=()=>{draft.image='';draft.artMode='image';draft.fit='contain';draft.imageX=50;draft.imageY=50;loadImage('');persist();editor()};
     }else{
-      const style=draft.textStyles?.[key]||{};
-      box.innerHTML=`<h3>${escaped(fieldNames[key]||key)} · 수정 가능</h3><p>문구를 드래그해 이동하고 색상과 정렬을 바꿔 보세요.</p><label>선택한 문구 크기 <select id="fwTextScale">${[80,90,100,110,120].map(x=>`<option value="${x}">${x}%</option>`).join('')}</select></label><label>정렬 <select id="fwTextAlign"><option value="left">왼쪽</option><option value="center">가운데</option><option value="right">오른쪽</option></select></label><div class="fw-brand-swatches">${['#191f28','#002f72','#2464eb','#ffffff'].map(c=>`<button data-text-color="${c}" style="background:${c}" aria-label="글자색 ${c}" title="${c}"></button>`).join('')}</div>`;
-      const update=(prop,value)=>{draft.textStyles=draft.textStyles||{};draft.textStyles[key]={...draft.textStyles[key],[prop]:value};persist();preview()};
-      box.querySelector('#fwTextScale').value=style.scale||100;box.querySelector('#fwTextAlign').value=style.align||defaultTextAlign(key);
-      box.querySelector('#fwTextScale').onchange=e=>update('scale',+e.target.value);box.querySelector('#fwTextAlign').onchange=e=>update('align',e.target.value);
-      box.querySelector('.fw-brand-swatches').remove();fillPicker(box,'글자 색상',style.fill||{type:'solid',colors:[style.color||draft.ink||premiumSets[draft.premium].ink,'#e968a0'],angle:135},fill=>{draft.textStyles=draft.textStyles||{};draft.textStyles[key]={...draft.textStyles[key],fill,color:fill.colors[0]};persist();preview()});
-      const font=document.createElement('div');font.className='fw-font-controls';font.innerHTML='<small>폰트</small><div class="fw-font-name">Pretendard <small>기본 폰트</small></div><select aria-label="글자 굵기"><option value="400">Regular</option><option value="500">Medium</option><option value="700">Bold</option><option value="800">Extra Bold</option></select>';box.querySelector('p').after(font);font.querySelector('select').value=style.weight||(key==='title'?800:['offer','cta'].includes(key)?700:400);font.querySelector('select').onchange=e=>update('weight',+e.target.value);
-      const alignRow=document.createElement('div');alignRow.className='fw-align-buttons';alignRow.innerHTML=[['left','왼쪽','☰'],['center','가운데','≡'],['right','오른쪽','☰']].map(([v,n,icon])=>`<button data-text-align="${v}" aria-label="${n} 정렬" aria-pressed="${(style.align||defaultTextAlign(key))===v}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h18M3 13h18"/><path d="${v==='left'?'M3 9h11M3 17h11':v==='center'?'M6.5 9h11M6.5 17h11':'M10 9h11M10 17h11'}"/></svg></button>`).join('');box.querySelector('.fw-fill-picker').before(alignRow);box.querySelector('#fwTextAlign').closest('label').hidden=true;alignRow.querySelectorAll('button').forEach(b=>b.onclick=()=>{update('align',b.dataset.textAlign);alignRow.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b))) });
+      textInspector(box,key);
     }
     const actions=document.createElement('div');actions.className='fw-element-actions';const hidden=key==='image'?draft.artMode==='none':draft.textStyles?.[key]?.hidden;actions.innerHTML='<button type="button" data-position-reset>위치 초기화</button><button type="button" data-remove-element>'+ (hidden?'다시 표시':'선택 요소 삭제')+'</button>';box.querySelector('h3').after(actions);actions.querySelector('[data-remove-element]').onclick=()=>{if(!hidden){removeSelected();return}if(key==='image')draft.artMode='image';else draft.textStyles[key].hidden=false;persist();selectElement(key);preview()};actions.querySelector('[data-position-reset]').onclick=()=>{if(key==='image')delete draft.imagePosition;else if(draft.textStyles?.[key]){delete draft.textStyles[key].x;delete draft.textStyles[key].y}persist();preview()};
-    const input=document.getElementById('fw-'+key);if(input?.closest('details'))input.closest('details').open=true;preview();
+    box.querySelector('[data-position-reset]').disabled=!!draft.textStyles?.[key]?.locked;box.querySelector('[data-remove-element]').disabled=!!draft.textStyles?.[key]?.locked;const input=document.getElementById('fw-'+key);if(input?.closest('details'))input.closest('details').open=true;preview();
   }
   function reviewEditor(){
     if(!historyCurrent||JSON.parse(historyCurrent).id!==draft.id){undoStack=[];redoStack=[];historyCurrent=JSON.stringify(draft)}
@@ -418,7 +458,7 @@
     selectElement(selectedElement);
     bindCanvasMovement(document.getElementById('fwCanvas'));
     document.getElementById('fwDownload').textContent='다운로드 ↓';document.getElementById('fwDownload').onclick=exportDialog;
-    top.querySelector('#fwStatus').title=cloud?cloud.email+' · Cloudflare에 자동 저장됩니다.':'현재 브라우저에 자동 저장됩니다.';if(cloud)status('한패스 팀 클라우드 · '+cloud.email);
+    top.querySelector('#fwStatus').title='현재 브라우저에 자동 저장됩니다. 서버 계정 저장은 아직 연결되지 않았습니다.';
   }
   function polishPanels(){
     const railIcons={
@@ -468,7 +508,13 @@
     tabbar.querySelectorAll('button').forEach(b=>b.onclick=()=>{const page=b.dataset.inspector==='page';elementPane.hidden=page;pagePane.hidden=!page;tabbar.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b))});
     const secondary=document.createElement('details');secondary.className='fw-extra-text';secondary.innerHTML='<summary>혜택·버튼·추가 안내</summary>';content.insertBefore(secondary,property);
     for(const key of ['offer','cta','note','period','coupon']){const input=document.getElementById('fw-'+key);if(input)secondary.append(input.closest('label'))}
-    const require=document.getElementById('fwRequireNote');if(require)secondary.append(require.closest('label'));secondary.open=['offer','cta','note','period','coupon'].includes(selectedElement);if(studioLibrary==='assets'){tabs.hidden=true;footer.hidden=true;library.querySelector('h2').textContent='이미지·아이콘'}
+    const require=document.getElementById('fwRequireNote');if(require)secondary.append(require.closest('label'));secondary.open=['offer','cta','note','period','coupon'].includes(selectedElement);
+    content.prepend(property);const allText=document.createElement('div');allText.hidden=true;content.append(allText);Array.from(content.children).filter(e=>e!==property&&e!==allText).forEach(e=>allText.append(e));
+    const textList=document.createElement('details');textList.className='fw-all-text';textList.innerHTML='<summary>문구 선택</summary><div class="fw-text-selector"></div>';content.append(textList);
+    const refreshTextList=()=>{const list=textList.querySelector('div');list.replaceChildren();for(const [key,label] of [...Object.entries(fieldNames),...(draft.extraTexts||[]).map(x=>[x.key,'복제 문구'])]){const button=document.createElement('button');button.type='button';button.textContent=label+(draft.textStyles?.[key]?.hidden?' · 숨김':'');button.setAttribute('aria-pressed',String(selectedElement===key));button.onclick=()=>{selectElement(key);refreshTextList();property.scrollIntoView({block:'start',behavior:'smooth'});property.querySelector('textarea')?.focus({preventScroll:true})};list.append(button)}};refreshTextList();
+    if(require){const notice=document.createElement('details');notice.className='fw-all-text';notice.innerHTML='<summary>안내 설정</summary>';notice.append(require.closest('label'));content.append(notice)}
+    const layerList=layers.querySelector('.fw-layer-list');for(const item of draft.extraTexts||[]){const b=document.createElement('button');b.textContent='T '+item.value.slice(0,20)+(draft.textStyles?.[item.key]?.hidden?' · 숨김':'');b.onclick=()=>selectElement(item.key);layerList.append(b)}
+if(studioLibrary==='assets'){tabs.hidden=true;footer.hidden=true;library.querySelector('h2').textContent='이미지·아이콘'}
   }
 
   function exportDialog(){
@@ -492,12 +538,18 @@
     document.getElementById('fwRemoveImage').onclick=()=>{draft.image='';picture=null;preview();persist()};
     document.getElementById('fwDownload').onclick=async e=>{const b=e.currentTarget;preview();if(checks.some(x=>x.error)){status('표시된 글자 넘침·필수 항목을 수정한 후 다운로드해 주세요.');document.getElementById('fwChecks').scrollIntoView({block:'nearest'});return}b.disabled=true;try{await Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]);const c=document.createElement('canvas');paint(c,draft,picture);const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));if(!blob)throw Error();const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`hanpass-${f[1]}x${f[2]}.png`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);status(`${f[1]} × ${f[2]}px PNG 저장 완료`)}catch{status('다운로드하지 못했어요. 다시 시도해 주세요.')}finally{b.disabled=false}};
   }
-  const renderBaseEditor=editor;editor=function(){renderBaseEditor();reviewEditor();polishPanels()};
+  async function openSvgEditor(){try{const source=draft.svgRef?await HanpassDesignStorage.load(draft.svgRef):draft.svgDesign;await HanpassSvg.open({source,name:draft.name,onSave:async source=>{const ref=await HanpassDesignStorage.save(source);draft.svgRef=ref;delete draft.svgDesign;persist();flush();const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved?.svgRef!==ref)throw Error('디자인 목록을 저장하지 못했습니다. 파일을 내려받아 보관해 주세요.');},onClose:()=>navigate('mine')})}catch(e){notify(e.message)}}
+  function bindSvgImport(){
+    if(document.getElementById('fwSvgImport'))return;const top=document.querySelector('.fw-top')||document.querySelector('.hp-hero nav')||document.querySelector('#app main')||document.getElementById('app');if(!top)return;
+    const button=document.createElement('button');button.id='fwSvgImport';button.className='sv-import-button';button.textContent='SVG 디자인 가져오기';button.title='피그마·일러스트에서 SVG로 내보내기 · 텍스트 윤곽선 변환 해제';
+    const input=document.createElement('input');input.type='file';input.accept='.svg,image/svg+xml';input.hidden=true;input.setAttribute('aria-label','SVG 디자인 파일');top.prepend(button,input);button.onclick=()=>input.click();input.onchange=async()=>{const file=input.files[0];if(!file)return;try{status('SVG 원본을 읽는 중…');const parsed=HanpassSvg.clean(await file.text());const svgRef=await HanpassDesignStorage.save(HanpassSvg.serialize(parsed.svg));flush();draft={id:crypto.randomUUID(),format:1,theme:0,title:file.name.replace(/\.svg$/i,''),name:file.name.replace(/\.svg$/i,''),desc:'',image:'',scale:100,svgRef};picture=null;persist();flush();navigate('format-edit')}catch(e){notify(e.message);input.value=''}};
+  }
+  const renderBaseEditor=editor;editor=function(){if(!draft)restore();if(draft?.svgDesign||draft?.svgRef){openSvgEditor();return}renderBaseEditor();reviewEditor();polishPanels();bindSvgImport()};
   const previousNavigate=navigate;
   navigate=function(page){if(state.page==='format-edit')flush();previousNavigate(page)};
   if(cloud)cloud.listen((message,saved,result,source)=>{status(message);if(saved){const w=works.find(w=>w.id===saved.id);if(w&&w.image===source.image)w.image=saved.image;if(draft?.id===saved.id&&draft.image===source.image)draft.image=saved.image;try{localStorage.setItem(worksKey,JSON.stringify(works));if(draft)localStorage.setItem(storageKey,JSON.stringify(draft))}catch{}}});
   window.addEventListener('pagehide',flush);
-  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent=cloud?'로그인한 계정의 디자인을 클라우드에서 불러옵니다.':'내 디자인은 이 브라우저에 저장됩니다. 다른 PC와 자동으로 공유되지 않습니다.'}bindWorks()};
+  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent='내 디자인은 이 브라우저에 저장됩니다. 다른 PC와 자동으로 공유되지 않습니다.'}bindWorks();bindSvgImport()};
   Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{home();bindWorks()}});render();
 })();
 

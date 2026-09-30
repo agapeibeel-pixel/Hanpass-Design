@@ -32,6 +32,8 @@ export function validateDocument(d,id){
   if(!Number.isInteger(d.format)||d.format<0||d.format>13||!Number.isInteger(d.theme)||d.theme<0||d.theme>7)fail('지원하지 않는 디자인 규격입니다.');
   for(const field of ['title','desc','offer','cta','note','name','period','coupon'])if(d[field]!==undefined&&(typeof d[field]!=='string'||d[field].length>1000))fail('문구 길이를 확인해 주세요.');
   if(typeof d.title!=='string'||typeof d.desc!=='string')fail('디자인 문구가 필요합니다.');
+  if(d.svgDesign!==undefined&&typeof d.svgDesign!=='string')fail('SVG 원본 형식을 확인해 주세요.');
+  if(d.svgRef!==undefined&&!new RegExp('^/api/assets/'+UUID.source.slice(1,-1)+'$','i').test(d.svgRef))fail('SVG 원본을 먼저 업로드해 주세요.');
   if(d.image&&!new RegExp('^/api/assets/'+UUID.source.slice(1,-1)+'$','i').test(d.image))fail('이미지를 먼저 업로드해 주세요.');
   return d;
 }
@@ -48,16 +50,26 @@ export async function api(req,env,user){
   const project=path.match(/^\/api\/projects\/([a-f0-9-]+)$/i);
   if(project&&UUID.test(project[1])&&req.method==='PUT'){
     if(!req.headers.get('Content-Type')?.startsWith('application/json'))return json({error:'JSON 요청이 필요합니다.'},415);
-    let input;try{input=JSON.parse(new TextDecoder().decode(await readBody(req,128*1024)))}catch(e){if(e.status)throw e;return json({error:'올바른 JSON이 아닙니다.'},400)}
+    let input;try{input=JSON.parse(new TextDecoder().decode(await readBody(req,2*1024*1024)))}catch(e){if(e.status)throw e;return json({error:'올바른 JSON이 아닙니다.'},400)}
     const d=validateDocument(input.document,project[1]),revision=input.revision;
     if(!Number.isSafeInteger(revision)||revision<0)return json({error:'저장 버전을 확인해 주세요.'},400);
     if(d.image){const asset=await env.DB.prepare('SELECT id FROM assets WHERE id=? AND owner=?').bind(d.image.split('/').pop(),owner).first();if(!asset)return json({error:'사용할 수 없는 이미지입니다.'},403)}
+    if(d.svgRef){const asset=await env.DB.prepare('SELECT id FROM assets WHERE id=? AND owner=?').bind(d.svgRef.split('/').pop(),owner).first();if(!asset)return json({error:'사용할 수 없는 원본입니다.'},403)}
     const now=Date.now(),document=JSON.stringify({...d,updated:now});
     const result=revision===0
       ?await env.DB.prepare('INSERT OR IGNORE INTO projects(owner,id,document,revision,updated_at) VALUES(?,?,?,1,?)').bind(owner,d.id,document,now).run()
       :await env.DB.prepare('UPDATE projects SET document=?,revision=revision+1,updated_at=? WHERE owner=? AND id=? AND revision=?').bind(document,now,owner,d.id,revision).run();
     if(!result.meta.changes)return json({error:'다른 창에서 수정된 디자인입니다. 새로고침 후 복사본으로 보관해 주세요.',conflict:true},409);
     return json({revision:revision+1,updated:now});
+  }
+  if(path==='/api/design-files'&&req.method==='POST'){
+    if(req.headers.get('Content-Type')!=='application/octet-stream'||!req.body)return json({error:'원본 파일이 필요합니다.'},415);
+    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(owner)))).map(v=>v.toString(16).padStart(2,'0')).join('');
+    const id=crypto.randomUUID(),key=hash+'/'+id;
+    // Streaming avoids loading the original file into Worker memory. Provider limits still apply.
+    const object=await env.FILES.put(key,req.body,{httpMetadata:{contentType:'application/octet-stream'}});
+    try{await env.DB.prepare('INSERT INTO assets(id,owner,object_key,content_type,byte_size,created_at) VALUES(?,?,?,?,?,?)').bind(id,owner,key,'application/octet-stream',object.size,Date.now()).run()}catch(e){await env.FILES.delete(key);throw e}
+    return json({id,url:'/api/assets/'+id},201);
   }
   if(path==='/api/assets'&&req.method==='POST'){
     const type=req.headers.get('Content-Type')?.split(';')[0];
@@ -78,7 +90,7 @@ export async function api(req,env,user){
     const record=await env.DB.prepare('SELECT object_key,content_type FROM assets WHERE id=? AND owner=?').bind(asset[1],owner).first();
     if(!record)return json({error:'이미지를 찾을 수 없습니다.'},404);
     const object=await env.FILES.get(record.object_key);if(!object)return json({error:'이미지를 찾을 수 없습니다.'},404);
-    return new Response(req.method==='HEAD'?null:object.body,{headers:{'Content-Type':record.content_type,'Content-Length':String(object.size),'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
+    return new Response(req.method==='HEAD'?null:object.body,{headers:{'Content-Type':record.content_type,'Content-Length':String(object.size),'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff',...(record.content_type==='application/octet-stream'?{'Content-Disposition':'attachment; filename="design.svg"'}:{})}});
   }
   return json({error:'지원하지 않는 요청입니다.'},404);
 }

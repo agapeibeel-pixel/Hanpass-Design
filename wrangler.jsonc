@@ -6,6 +6,10 @@
   "compatibility_date": "2026-09-30",
   "workers_dev": true,
   "preview_urls": false,
+  "routes": [
+    { "pattern": "hanpass-design.kr", "custom_domain": true },
+    { "pattern": "www.hanpass-design.kr", "custom_domain": true }
+  ],
   "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true },
   "vars": {
     "ALLOWED_EMAIL_DOMAIN": "hanpass.com",
