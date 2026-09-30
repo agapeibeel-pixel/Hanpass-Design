@@ -1,5 +1,7 @@
 // Size-first employee editor. Canvas is shared by preview and PNG export.
-(() => {
+(async () => {
+  let cloud;
+  try{cloud=await window.HanpassCloud}catch(e){document.getElementById('app').textContent=e.message;return}
   const formats = [
     ['모바일 배너',616,136,'모바일 화면에 짧은 소식을 전할 때'],
     ['홈 상단 배너',640,284,'홈에서 행사와 혜택을 소개할 때'],
@@ -50,11 +52,12 @@
   ]);
   const brandLogo=new Image(), brandWhite=new Image(), brandCards=new Image();
   const brandReady=Promise.all([new Promise(resolve=>{brandWhite.onload=resolve;brandWhite.onerror=resolve;brandWhite.src='assets/hanpass-logo-white.svg'}),new Promise(resolve=>{brandLogo.onload=resolve;brandLogo.onerror=resolve;brandLogo.src='assets/hanpass-logo-3.svg'}),new Promise(resolve=>{brandCards.onload=resolve;brandCards.onerror=resolve;brandCards.src='assets/hanpass-cards.png'})]);
-  const storageKey='hanpass-size-draft-v1';
-  const worksKey='hanpass-format-works-v1';
+  const storageKey=cloud?cloud.key+':draft':'hanpass-size-draft-v1';
+  const worksKey=cloud?cloud.key+':works':'hanpass-format-works-v1';
   const valid=d=>d&&formats[d.format]&&themes[d.theme];
   let works=[];
   try{works=JSON.parse(localStorage.getItem(worksKey)||'[]').filter(valid);const last=JSON.parse(localStorage.getItem(storageKey)||'null');if(!works.length&&valid(last)){last.id=last.id||crypto.randomUUID();works=[last];localStorage.setItem(worksKey,JSON.stringify(works));localStorage.setItem(storageKey,JSON.stringify(last))}}catch{works=[]}
+  if(cloud){try{works=(await cloud.load()).filter(valid);localStorage.setItem(worksKey,JSON.stringify(works));const last=JSON.parse(localStorage.getItem(storageKey)||'null');if(last){const latest=works.find(w=>w.id===last.id);if(latest)localStorage.setItem(storageKey,JSON.stringify(latest))}}catch(e){document.getElementById('app').textContent='저장한 디자인을 불러오지 못했습니다. 새로고침해 주세요.';return}}
   const escaped=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let draft=null, picture=null, hits=[], saveTimer;
   let checks=[],actualSize=false;
@@ -63,7 +66,7 @@
   function contrast(a,b){const lum=x=>{const v=x.match(/[a-f0-9]{2}/gi).map(n=>parseInt(n,16)/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return v[0]*.2126+v[1]*.7152+v[2]*.0722};const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
   const baseRender=render;
   function start(i){flush();draft={id:crypto.randomUUID(),format:i,title:i>6?'한패스와 함께하는 특별한 혜택':'일상에 더하는,\n한패스의 혜택',desc:'지금 새로운 혜택을 만나보세요',offer:'5,000원 혜택',cta:'자세히 보기',note:'',theme:5+i%3,premium:i%6,image:'',scale:100};picture=null;flush();navigate('format-edit')}
-  function flush(){clearTimeout(saveTimer);saveTimer=null;if(!draft)return;draft.id=draft.id||crypto.randomUUID();draft.updated=Date.now();const next=[structuredClone(draft),...works.filter(w=>w.id!==draft.id)];works=next;try{localStorage.setItem(worksKey,JSON.stringify(next));localStorage.setItem(storageKey,JSON.stringify(draft));status('이 브라우저에 저장됨')}catch{status('저장 공간이 부족해요. PNG를 다운로드해 주세요.')}}
+  function flush(){clearTimeout(saveTimer);saveTimer=null;if(!draft)return;draft.id=draft.id||crypto.randomUUID();draft.updated=Date.now();const next=[structuredClone(draft),...works.filter(w=>w.id!==draft.id)];works=next;try{localStorage.setItem(worksKey,JSON.stringify(next));localStorage.setItem(storageKey,JSON.stringify(draft));status(cloud?'클라우드 저장 대기':'이 브라우저에 저장됨');if(cloud)cloud.save(draft)}catch{status('저장 공간이 부족해요. PNG를 다운로드해 주세요.')}}
   let undoStack=[],redoStack=[],historyCurrent=null;
   function trackHistory(){const next=JSON.stringify(draft);if(historyCurrent&&JSON.parse(historyCurrent).id===draft.id&&next!==historyCurrent){undoStack.push(historyCurrent);if(undoStack.length>60)undoStack.shift();redoStack=[]}else if(historyCurrent&&JSON.parse(historyCurrent).id!==draft.id){undoStack=[];redoStack=[]}historyCurrent=next;historyButtons()}
   function historyButtons(){const u=document.getElementById('fwUndo'),r=document.getElementById('fwRedo');if(u)u.disabled=!undoStack.length;if(r)r.disabled=!redoStack.length}
@@ -415,7 +418,7 @@
     selectElement(selectedElement);
     bindCanvasMovement(document.getElementById('fwCanvas'));
     document.getElementById('fwDownload').textContent='다운로드 ↓';document.getElementById('fwDownload').onclick=exportDialog;
-    top.querySelector('#fwStatus').title='현재 브라우저에 자동 저장됩니다. 서버 계정 저장은 아직 연결되지 않았습니다.';
+    top.querySelector('#fwStatus').title=cloud?cloud.email+' · Cloudflare에 자동 저장됩니다.':'현재 브라우저에 자동 저장됩니다.';if(cloud)status('한패스 팀 클라우드 · '+cloud.email);
   }
   function polishPanels(){
     const railIcons={
@@ -492,8 +495,9 @@
   const renderBaseEditor=editor;editor=function(){renderBaseEditor();reviewEditor();polishPanels()};
   const previousNavigate=navigate;
   navigate=function(page){if(state.page==='format-edit')flush();previousNavigate(page)};
+  if(cloud)cloud.listen((message,saved,result,source)=>{status(message);if(saved){const w=works.find(w=>w.id===saved.id);if(w&&w.image===source.image)w.image=saved.image;if(draft?.id===saved.id&&draft.image===source.image)draft.image=saved.image;try{localStorage.setItem(worksKey,JSON.stringify(works));if(draft)localStorage.setItem(storageKey,JSON.stringify(draft))}catch{}}});
   window.addEventListener('pagehide',flush);
-  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent='내 디자인은 이 브라우저에 저장됩니다. 다른 PC와 자동으로 공유되지 않습니다.'}bindWorks()};
+  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent=cloud?'로그인한 계정의 디자인을 클라우드에서 불러옵니다.':'내 디자인은 이 브라우저에 저장됩니다. 다른 PC와 자동으로 공유되지 않습니다.'}bindWorks()};
   Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{home();bindWorks()}});render();
 })();
 

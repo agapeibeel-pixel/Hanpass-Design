@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hanpass-design",
+  "main": "cloudflare/platform.mjs",
+  "account_id": "7d2b1c812318cc34e1a59400122bb4ee",
+  "compatibility_date": "2026-09-30",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true },
+  "vars": { "ALLOWED_EMAIL_DOMAIN": "hanpass.com" },
+  "d1_databases": [{ "binding": "DB", "database_name": "hanpass-design-db", "database_id": "9c1fe915-7142-45d4-b5ec-80d5e91ed3e3", "migrations_dir": "cloudflare/migrations" }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "hanpass-design-files" }]
+}
