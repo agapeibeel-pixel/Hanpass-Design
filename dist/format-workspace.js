@@ -562,13 +562,21 @@ if(studioLibrary==='assets'){tabs.hidden=true;footer.hidden=true;library.querySe
     return true;
   }
 
+  window.HanpassWorkspace={
+    get works(){return works},get email(){return cloud?.email||''},get current(){return draft},navigate,open:openWork,
+    async refresh(){if(cloud){works=(await cloud.load()).filter(valid);localStorage.setItem(worksKey,JSON.stringify(works))}},
+    save(d){d.updated=Date.now();works=[structuredClone(d),...works.filter(w=>w.id!==d.id)];localStorage.setItem(worksKey,JSON.stringify(works));if(draft?.id===d.id){draft=structuredClone(d);localStorage.setItem(storageKey,JSON.stringify(draft))}if(cloud)cloud.save(d);return d},
+    async source(d){return d.svgRef?HanpassDesignStorage.load(d.svgRef):d.svgDesign||null},
+    paint(canvas,d){paint(canvas,d,null)},
+    async raster(d){const c=document.createElement('canvas');let im=null;if(d.image){im=new Image();im.src=d.image;await im.decode()}await document.fonts.ready;paint(c,d,im);return c}
+  };
   const previousNavigate=navigate;
   navigate=function(page){if(state.page==='format-edit')flush();previousNavigate(page)};
   if(cloud)window.hanpassAccountEmail=cloud.email;
   if(cloud)cloud.listen((message,saved,result,source)=>{status(message);if(saved){const w=works.find(w=>w.id===saved.id);if(w&&w.image===source.image)w.image=saved.image;if(draft?.id===saved.id&&draft.image===source.image)draft.image=saved.image;try{localStorage.setItem(worksKey,JSON.stringify(works));if(draft)localStorage.setItem(storageKey,JSON.stringify(draft))}catch{}}});
   window.addEventListener('pagehide',flush);
-  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}if(state.page==='upload'){uploadPage();return}if(managementPage())return;document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent=cloud?'내 디자인은 로그인한 계정에 저장됩니다.':'내 디자인은 이 브라우저에 저장됩니다.'}bindWorks();bindSvgImport()};
-  Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{if(state.page==='upload'){uploadPage();return}if(managementPage())return;home();bindWorks();bindSvgImport()}});render();
+  render=function(){if(state.page!=='format-edit'&&saveTimer)flush();if(state.page==='format-edit'){editor();return}if(window.HanpassStudio?.render(state.page))return;if(state.page==='catalog'){state.page='home';easy.admin=false;baseRender();home();state.page='catalog';bindWorks();bindSvgImport();return}if(state.page==='upload'){uploadPage();return}if(managementPage())return;document.body.classList.remove('fw-editing');baseRender();home();if(state.page==='mine'){const filters=document.querySelector('.filters');if(filters)filters.remove();const info=document.querySelector('.easy-disclaimer');if(info)info.textContent=cloud?'내 디자인은 로그인한 계정에 저장됩니다.':'내 디자인은 이 브라우저에 저장됩니다.'}bindWorks();bindSvgImport()};
+  Promise.all([document.fonts.ready,editorFontReady,brandReady,premiumReady]).then(()=>{if(state.page==='format-edit')preview();else{if(window.HanpassStudio?.render(state.page))return;if(state.page==='upload'){uploadPage();return}if(managementPage())return;home();bindWorks();bindSvgImport()}});render();
 })();
 
 

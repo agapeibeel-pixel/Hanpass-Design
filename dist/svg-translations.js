@@ -7,7 +7,7 @@
   if(header<0)throw Error('언어 열을 찾지 못했습니다. KR, EN(또는 ETC), KH 등의 열 제목이 있는 시트를 선택하세요.');
   const columns=matrix[header].map((v,index)=>({code:code(v),index})).filter(c=>c.code);
   if(new Set(columns.map(c=>c.code)).size!==columns.length)throw Error('같은 언어 열이 중복되어 있습니다. 사용할 열만 남겨 주세요.');
-  const rows=[];for(let i=header+1;i<matrix.length;i++){const row=matrix[i];if(columns.filter(c=>code(row[c.index])===c.code).length>=2)continue;if(!columns.some(c=>norm(row[c.index])))continue;const values={};columns.forEach(c=>values[c.code]=String(row[c.index]??''));rows.push({number:i+1,values})}
+  const keyIndex=matrix[header].findIndex(v=>/^(key|키)$/i.test(norm(v)));const rows=[];for(let i=header+1;i<matrix.length;i++){const row=matrix[i];if(columns.filter(c=>code(row[c.index])===c.code).length>=2)continue;if(!columns.some(c=>norm(row[c.index])))continue;const values={};columns.forEach(c=>values[c.code]=String(row[c.index]??''));rows.push({number:i+1,key:keyIndex>=0?norm(row[keyIndex]):'',values})}
   return {columns,rows};
  }
  const matches=(text,rows,source)=>rows.filter(r=>norm(r.values[source])===norm(text)&&norm(text));

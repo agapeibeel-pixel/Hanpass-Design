@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync} from 'node:fs';
+import {automationApi,scheduled,validateConfig} from './automation.mjs';
+const id='11111111-1111-4111-8111-111111111111',owner={email:'test@hanpass.com'};
+function env(){const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('./migrations/0001_projects.sql',import.meta.url),'utf8'));sql.prepare('INSERT INTO projects VALUES(?,?,?,?,?)').run(owner.email,id,JSON.stringify({id,title:'원본',desc:'',format:1,theme:0}),1,0);return {sql,DB:{prepare(q){return {bind(...v){return {run:async()=>({meta:sql.prepare(q).run(...v)}),first:async()=>sql.prepare(q).get(...v),all:async()=>({results:sql.prepare(q).all(...v)})}}}}}}}
+const config={enabled:true,time:'09:00',count:2,ids:[id]};
+const request=(config,run=false,origin='https://site.test')=>new Request('https://site.test/api/automation',{method:'POST',headers:{Origin:origin},body:JSON.stringify({config,run})});
+test('schedule rejects invalid time and other owners source designs',async()=>{assert.throws(()=>validateConfig({...config,time:'25:00'}));assert.throws(()=>validateConfig({...config,count:999}));const e=env();assert.equal((await automationApi(request(config),e,{email:'other@hanpass.com'})).status,400);assert.equal((await automationApi(request(config,false,'https://evil.test'),e,owner)).status,403);assert.equal(e.sql.prepare('SELECT count(*) n FROM projects').get().n,1)});
+test('Korean schedule runs once per day and preserves the original',async()=>{const e=env();assert.equal((await automationApi(request(config),e,owner)).status,200);await scheduled(e,Date.parse('2026-10-01T00:00:00Z'));await scheduled(e,Date.parse('2026-10-01T00:00:00Z'));assert.equal(e.sql.prepare('SELECT count(*) n FROM projects').get().n,3);assert.equal(JSON.parse(e.sql.prepare('SELECT document FROM projects WHERE id=?').get(id).document).title,'원본');await scheduled(e,Date.parse('2026-10-02T00:00:00Z'));assert.equal(e.sql.prepare('SELECT count(*) n FROM projects').get().n,5)});
+test('manual generation records actual counts and disabled schedule stays idle',async()=>{const e=env();const r=await automationApi(request({...config,enabled:false},true),e,owner),body=await r.json();assert.equal(body.projects.length,2);assert.equal(body.logs[0].count,2);await scheduled(e,Date.parse('2026-10-03T00:00:00Z'));assert.equal(e.sql.prepare('SELECT count(*) n FROM projects').get().n,3)});

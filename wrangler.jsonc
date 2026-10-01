@@ -6,6 +6,7 @@
   "compatibility_date": "2026-09-30",
   "workers_dev": true,
   "preview_urls": false,
+  "triggers": {"crons": ["0 * * * *"]},
   "routes": [
     { "pattern": "hanpass-design.kr", "custom_domain": true },
     { "pattern": "www.hanpass-design.kr", "custom_domain": true }

@@ -1,3 +1,4 @@
+import {automationApi,scheduled} from './automation.mjs';
 import {landing} from './landing.mjs';
 import {createRemoteJWKSet, jwtVerify} from 'jose';
 
@@ -42,6 +43,7 @@ export function validateDocument(d,id){
 export async function api(req,env,user){
   const url=new URL(req.url),path=url.pathname,owner=user.email;
   if(req.method!=='GET'&&req.method!=='HEAD'&&req.headers.get('Origin')!==url.origin)return json({error:'다른 출처의 요청은 허용되지 않습니다.'},403);
+  if(path==='/api/automation')return automationApi(req,env,user);
   if(path==='/api/session'&&req.method==='GET')return json({email:owner,storage:'cloudflare',database:Boolean(env.DB),files:Boolean(env.FILES)});
   if(!env.DB||!env.FILES) return json({error:'저장소 연결을 준비 중입니다.'},503);
   if(path==='/api/projects'&&req.method==='GET'){
@@ -96,7 +98,7 @@ export async function api(req,env,user){
   return json({error:'지원하지 않는 요청입니다.'},404);
 }
 
-export default {async fetch(req,env){
+export default {scheduled(event,env,ctx){ctx.waitUntil(scheduled(env,event.scheduledTime))},async fetch(req,env){
   try{
     const url=new URL(req.url);
     if(['/', '/index.html'].includes(url.pathname)&&['GET','HEAD'].includes(req.method))return new Response(req.method==='HEAD'?null:landing,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'same-origin'}});
