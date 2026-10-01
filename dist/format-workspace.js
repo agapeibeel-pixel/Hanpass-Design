@@ -1,7 +1,7 @@
 // Size-first employee editor. Canvas is shared by preview and PNG export.
 (async () => {
   let cloud;
-  try{cloud=await window.HanpassCloud}catch(e){document.getElementById("app").textContent=e.message;return}
+  try{cloud=await window.HanpassCloud}catch(e){document.body.classList.remove("studio-loading");document.getElementById("app").textContent=e.message;return}
   const formats = [
     ['모바일 배너',616,136,'모바일 화면에 짧은 소식을 전할 때'],
     ['홈 상단 배너',640,284,'홈에서 행사와 혜택을 소개할 때'],
@@ -57,7 +57,7 @@
   const valid=d=>d&&formats[d.format]&&themes[d.theme];
   let works=[];
   try{works=JSON.parse(localStorage.getItem(worksKey)||'[]').filter(valid);const last=JSON.parse(localStorage.getItem(storageKey)||'null');if(!works.length&&valid(last)){last.id=last.id||crypto.randomUUID();works=[last];localStorage.setItem(worksKey,JSON.stringify(works));localStorage.setItem(storageKey,JSON.stringify(last))}}catch{works=[]}
-  if(cloud){try{works=(await cloud.load()).filter(valid);localStorage.setItem(worksKey,JSON.stringify(works));const last=JSON.parse(localStorage.getItem(storageKey)||'null');if(last){const latest=works.find(w=>w.id===last.id);if(latest)localStorage.setItem(storageKey,JSON.stringify(latest))}}catch(e){document.getElementById('app').textContent='저장한 디자인을 불러오지 못했습니다. 새로고침해 주세요.';return}}
+  if(cloud){try{works=(await cloud.load()).filter(valid);localStorage.setItem(worksKey,JSON.stringify(works));const last=JSON.parse(localStorage.getItem(storageKey)||'null');if(last){const latest=works.find(w=>w.id===last.id);if(latest)localStorage.setItem(storageKey,JSON.stringify(latest))}}catch(e){document.body.classList.remove('studio-loading');document.getElementById('app').textContent='저장한 디자인을 불러오지 못했습니다. 새로고침해 주세요.';return}}
   const escaped=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let draft=null, picture=null, hits=[], saveTimer;
   let checks=[],actualSize=false;
@@ -562,6 +562,7 @@ if(studioLibrary==='assets'){tabs.hidden=true;footer.hidden=true;library.querySe
     return true;
   }
 
+  document.body.classList.remove('studio-loading');
   window.HanpassWorkspace={
     get works(){return works},get email(){return cloud?.email||''},get current(){return draft},navigate,open:openWork,
     async refresh(){if(cloud){works=(await cloud.load()).filter(valid);localStorage.setItem(worksKey,JSON.stringify(works))}},
